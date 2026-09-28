@@ -96,11 +96,11 @@ class DocumentTest(TestCase):
 
     def test_elements_it_does_not_apply_to_are_left_exactly_alone(self) -> None:
         for augmentation in every_augmentation(p=0.5):
-            images = torch.rand(8, 3, 32, 40)
+            images = torch.rand(32, 3, 32, 40)
 
             output = augmentation(images, seed=3)
 
-            unchanged = [bool(torch.equal(output[i], images[i])) for i in range(8)]
+            unchanged = [bool(torch.equal(output[i], images[i])) for i in range(len(images))]
             name = type(augmentation).__name__
 
             self.assertTrue(any(unchanged), name)

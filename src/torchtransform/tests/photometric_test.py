@@ -149,7 +149,7 @@ class PhotometricTest(TestCase):
 
     def test_elements_draw_their_own_parameters(self) -> None:
         # The same image in every element of the batch comes out differently per element.
-        images = torch.rand(1, 3, 24, 24).expand(4, -1, -1, -1).contiguous()
+        images = torch.rand(1, 3, 24, 24).expand(16, -1, -1, -1).contiguous()
 
         for transform in every_transform():
             if isinstance(transform, (Equalize, Clamp)):
@@ -157,7 +157,9 @@ class PhotometricTest(TestCase):
 
             output = transform(images, seed=2)
 
-            self.assertFalse(torch.equal(output[0], output[1]), type(transform).__name__)
+            # Parameters with few values (such as bits) can repeat, but not for every element.
+            distinct = {tuple(x.flatten().tolist()) for x in output}
+            self.assertGreater(len(distinct), 1, type(transform).__name__)
 
     def test_elements_it_does_not_apply_to_are_untouched(self) -> None:
         images = torch.rand(16, 3, 16, 16)
