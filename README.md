@@ -11,14 +11,14 @@ chain in **one** resampling of only the output pixels instead. And since it keep
 augmentation, apply a transform in the frame of another, or replay the same geometry on labels
 afterward.
 
-![Geometric and photometric transforms, with keypoints and a box moving along](docs/gallery.png)
+![Geometric and photometric transforms, with keypoints and a box moving along](https://raw.githubusercontent.com/gerbenvv/torchtransform/main/docs/gallery.png)
 
 ## One resampling for the whole chain
 
 Resampling after every transform is slow, and every resampling blurs. Here are six rotations and
 scales that end where they started, applied one after the other and fused:
 
-![The same six transforms, one after the other and fused](docs/fusion.png)
+![The same six transforms, one after the other and fused](https://raw.githubusercontent.com/gerbenvv/torchtransform/main/docs/fusion.png)
 
 Any chain of affine, projective, warp, crop, pad and resize transforms, in any order and nested in
 `Maybe`, `OneOf` and `SomeOf`, becomes a single `grid_sample`, evaluated only for the output pixels:
@@ -182,7 +182,7 @@ The document transforms simulate scanners, printers, faxes and photocopiers, and
 a page legible: they fade ink and rules rather than erase them, so labels such as boxes and text stay
 true.
 
-![Document transforms](docs/document.png)
+![Document transforms](https://raw.githubusercontent.com/gerbenvv/torchtransform/main/docs/document.png)
 
 ## How it works
 
