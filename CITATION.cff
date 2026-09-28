@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "torchtransform: fast, batched data augmentation for PyTorch"
+type: software
+authors:
+    -   given-names: Gerben
+        name-particle: van
+        family-names: Veenendaal
+        email: gerbenvv@gmail.com
+abstract: "A PyTorch library for data augmentation that fuses every geometric transform of a pipeline into a single resampling and every color transform into a single matrix, draws random parameters per batch element, and transforms images, masks, points and boxes together, in 2D and 3D."
+repository-code: "https://github.com/gerbenvv/torchtransform"
+url: "https://github.com/gerbenvv/torchtransform"
+license: BSD-3-Clause
+version: 1.0.0
+date-released: "2026-09-28"
+keywords:
+    - data augmentation
+    - PyTorch
+    - computer vision
+    - deep learning
+    - image processing

@@ -1,0 +1,54 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools>=77" ]
+
+[project]
+name = "torchtransform"
+version = "1.0.0"
+description = """\
+    Fast, batched data augmentation for PyTorch: geometric transforms fused into a single resampling, per-element \
+    randomness, images, masks, points and boxes together, in 2D and 3D\
+    """
+readme = "README.md"
+keywords = [ "augmentation", "computer vision", "data augmentation", "deep learning", "pytorch" ]
+license = "BSD-3-Clause"
+authors = [ { name = "Gerben van Veenendaal", email = "gerbenvv@gmail.com" } ]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = [ "torch>=2" ]
+urls.Homepage = "https://github.com/gerbenvv/torchtransform"
+urls.Issues = "https://github.com/gerbenvv/torchtransform/issues"
+
+[tool.setuptools]
+packages.find.where = [ "src" ]
+packages.find.exclude = [ "torchtransform.tests*" ]
+
+[tool.black]
+target-version = [ "py310" ]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+line_length = 100
+combine_as_imports = true
+known_first_party = [ "torchtransform" ]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = "E203,E701"
+
+[tool.pyproject-fmt]
+indent = 4
