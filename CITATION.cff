@@ -10,7 +10,7 @@ authors:
 abstract: "A PyTorch library for data augmentation that fuses every geometric transform of a pipeline into a single resampling and every color transform into a single matrix, draws random parameters per batch element, and transforms images, masks, points and boxes together, in 2D and 3D."
 repository-code: "https://github.com/gerbenvv/torchtransform"
 url: "https://github.com/gerbenvv/torchtransform"
-license: BSD-3-Clause
+license: MIT
 version: 1.0.0
 date-released: "2026-09-28"
 keywords:

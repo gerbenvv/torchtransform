@@ -369,4 +369,4 @@ in other formats.
 
 ## License
 
-[BSD 3-Clause](LICENSE)
+[MIT](LICENSE)
