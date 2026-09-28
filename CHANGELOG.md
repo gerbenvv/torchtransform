@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 (2026-09-28)
+
+- The images of the README also show on PyPI.
+
 ## 1.0.0 (2026-09-28)
 
 The first release of torchtransform. It brings together two earlier implementations: a transform

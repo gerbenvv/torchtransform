@@ -352,14 +352,14 @@ augmentations, including the document transforms.
 If you use torchtransform in your work, please cite it:
 
 > Gerben van Veenendaal. *torchtransform: fast, batched data augmentation for PyTorch.* Software,
-> version 1.0.0, 2026. https://github.com/gerbenvv/torchtransform
+> version 1.0.1, 2026. https://github.com/gerbenvv/torchtransform
 
 ```bibtex
 @software{vanVeenendaal2026torchtransform,
     author  = {van Veenendaal, Gerben},
     title   = {torchtransform: Fast, Batched Data Augmentation for {PyTorch}},
     year    = {2026},
-    version = {1.0.0},
+    version = {1.0.1},
     url     = {https://github.com/gerbenvv/torchtransform},
 }
 ```

@@ -11,7 +11,7 @@ abstract: "A PyTorch library for data augmentation that fuses every geometric tr
 repository-code: "https://github.com/gerbenvv/torchtransform"
 url: "https://github.com/gerbenvv/torchtransform"
 license: MIT
-version: 1.0.0
+version: 1.0.1
 date-released: "2026-09-28"
 keywords:
     - data augmentation

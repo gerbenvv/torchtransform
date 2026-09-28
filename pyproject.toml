@@ -4,7 +4,7 @@ requires = [ "setuptools>=77" ]
 
 [project]
 name = "torchtransform"
-version = "1.0.0"
+version = "1.0.1"
 description = """\
     Fast, batched data augmentation for PyTorch: geometric transforms fused into a single resampling, per-element \
     randomness, images, masks, points and boxes together, in 2D and 3D\

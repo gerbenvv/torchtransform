@@ -113,7 +113,7 @@ from torchtransform.transform import (
 )
 from torchtransform.warps import ElasticWarp, GridDistortion, LensDistortion, Twirl, Wave
 
-__version__: str = "1.0.0"
+__version__: str = "1.0.1"
 
 __all__: list[str] = [
     "Affine",
