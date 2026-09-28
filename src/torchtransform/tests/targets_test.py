@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import torch
 
-from torchtransform.geometric import HorizontalFlip, Rotate, Scale
+from torchtransform.geometric import HorizontalFlip, Rotate, Scale, Translate
 from torchtransform.targets import (
     Boxes,
     Image,
@@ -143,3 +143,29 @@ class TargetsTest(TestCase):
 
         with self.assertRaises(ValueError):
             Boxes(torch.rand(1, 2, 5))
+
+    def test_boolean_masks(self) -> None:
+        masks = torch.rand(2, 1, 8, 8) > 0.5
+
+        output = Rotate(10)(Mask(masks))
+        self.assertEqual(output.dtype, torch.bool)
+
+    def test_large_labels_stay_exact(self) -> None:
+        labels = torch.full((1, 1, 4, 4), 2**24 + 1)
+
+        self.assertTrue(torch.equal(HorizontalFlip(p=1.0)(Mask(labels)), labels))
+        self.assertTrue(torch.equal(Rotate(90)(Mask(labels)), labels))
+
+    def test_nearest_padding_never_mixes_label_and_fill(self) -> None:
+        labels = torch.full((1, 1, 4, 4), 3)
+
+        for distance in (0.5, -0.5, 1.5, 0.4999, 0.5001):
+            output = Translate(x=distance)(Mask(labels, padding=255))
+            self.assertTrue(set(output.unique().tolist()) <= {3, 255}, distance)
+
+    def test_bicubic_padding_fills_exactly(self) -> None:
+        images = torch.full((1, 3, 32, 32), 0.5)
+
+        for padding in (0.5, "mean"):
+            output = Rotate(30)(Image(images, mode="bicubic", padding=padding))
+            torch.testing.assert_close(output, images)

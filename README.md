@@ -213,6 +213,14 @@ the pending matrix without applying it.
 two resamplings. Put the geometric transforms first, and crops early rather than late: photometric
 transforms then work on the smaller output.
 
+**Outputs can share memory with inputs.** Inputs are never changed, but a crop or a flip of the whole
+batch can return a view of the input, and a call that does nothing returns the input itself. Clone
+an output before changing it in-place.
+
+**Strong warps move points approximately.** Points are moved through a warp without a closed-form
+inverse by fixed-point iteration, which converges for any warp that moves nearby points by less than
+their distance, as sensible augmentations do. Very strong elastic warps can fold, and then do not.
+
 **The canvas is shared.** A batch is one tensor, so a canvas transform changes the canvas of the whole
 batch. Elements it does not apply to, by its probability or by not being chosen, are left unscaled in
 the center of the new canvas. A quarter turn of a canvas that is not square keeps the canvas, and

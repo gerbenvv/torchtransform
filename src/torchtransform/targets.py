@@ -87,6 +87,10 @@ class RasterTarget(Target):
         if self.data.is_floating_point():
             return self.data
 
+        # Float32 holds integers exactly up to 2 ** 24 only.
+        if self.data.dtype in (torch.int32, torch.int64):
+            return self.data.to(dtype=torch.float64)
+
         return self.data.to(dtype=torch.float32)
 
     def from_working(self, data: torch.Tensor) -> torch.Tensor:
@@ -94,6 +98,9 @@ class RasterTarget(Target):
 
         if self.data.is_floating_point():
             return data.to(dtype=self.data.dtype)
+
+        if self.data.dtype == torch.bool:
+            return data > 0.5
 
         info = torch.iinfo(self.data.dtype)
 

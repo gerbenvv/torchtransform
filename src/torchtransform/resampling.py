@@ -295,11 +295,12 @@ class Sampling:
         return self._sample(target, data), True
 
     def footprints(self) -> torch.Tensor:
-        """Returns how many input pixels an output pixel spans per input axis, of shape `(B, n)`."""
+        """Returns how far an output pixel reaches along every input axis, of shape `(B, n)`."""
 
         linear = self._backward[:, : self.ndim, : self.ndim]
 
-        return torch.abs(linear).sum(dim=2)
+        # How far a step between output pixels moves along an input axis, the same for any turn.
+        return torch.linalg.norm(linear, dim=2)
 
     def _gather(self, target: RasterTarget, data: torch.Tensor) -> tuple[torch.Tensor, bool]:
         """Resamples by gathering whole pixels, for signed permutations and whole-pixel moves."""
@@ -476,17 +477,22 @@ class Sampling:
     def _get_levels(self) -> torch.Tensor:
         """Returns the mipmap level per element and axis, in tensor order, of shape `(B, n)`.
 
-        An element shrunk about evenly along all axes (within a factor of two) gets one level for
-        all of them, from the axis it shrinks most along, so it needs a single mipmap. Only an
-        element shrunk much more along one axis than another gets a level per axis.
+        A level halves the resolution, and is used from where an element shrinks by its factor:
+        level one from shrinking by two. An element shrunk about evenly along all axes (within a
+        factor of two) gets one level for all of them, from the axis it shrinks most along, so it
+        needs a single mipmap. Only an element shrunk much more along one axis than another gets a
+        level per axis.
         """
 
-        footprints = self.footprints().flip(1).clamp(min=1)
-        levels = torch.round(torch.log2(footprints)).to(dtype=torch.int64)
+        footprints = self.footprints().flip(1)
+        footprints = torch.where(torch.isfinite(footprints), footprints, 1.0).clamp(min=1)
+
+        # A little over the footprint, so shrinking by exactly two is not rounded down.
+        levels = torch.floor(torch.log2(footprints) + 1e-6).to(dtype=torch.int64)
 
         largest = footprints.amax(dim=1, keepdim=True)
         even = largest <= 2 * footprints.amin(dim=1, keepdim=True)
-        uniform = torch.round(torch.log2(largest)).to(dtype=torch.int64).expand_as(levels)
+        uniform = torch.floor(torch.log2(largest) + 1e-6).to(dtype=torch.int64).expand_as(levels)
 
         return torch.where(even, uniform, levels)
 
@@ -557,12 +563,18 @@ class Sampling:
 
         key = (device, dtype)
         if key not in self._grids:
+            # Grids are computed in at least single precision, since half precision would put
+            # samples pixels off, and only stored in the dtype of the data.
+            working = dtype if dtype in (torch.float32, torch.float64) else torch.float32
+
             if self.kind == "affine":
-                self._grids[key] = self._get_affine_grid(device, dtype)
+                grid = self._get_affine_grid(device, working)
             elif self.kind == "projective":
-                self._grids[key] = self._get_projective_grid(device, dtype)
+                grid = self._get_projective_grid(device, working)
             else:
-                self._grids[key] = self._get_warp_grid(device, dtype)
+                grid = self._get_warp_grid(device, working)
+
+            self._grids[key] = grid.to(dtype=dtype)
 
         return self._grids[key]
 
@@ -653,7 +665,9 @@ def _get_coverage(grid: torch.Tensor, shape: tuple[int, ...], mode: str) -> torc
 
     With zeros padding, a bilinear sample at pixel position `x` (pixel `i` at `i`) of an axis of
     `N` pixels takes weight from within the source of `clamp(min(1 + x, N - x), 0, 1)`, and the
-    weights of the axes multiply. Bicubic samples are taken to cover the same.
+    weights of the axes multiply. A nearest sample rounds half to even, as `grid_sample` does. A
+    bicubic sample takes weight from four pixels along every axis, of the cubic convolution
+    kernel `grid_sample` uses.
     """
 
     coverage = None
@@ -661,13 +675,34 @@ def _get_coverage(grid: torch.Tensor, shape: tuple[int, ...], mode: str) -> torc
         position = ((grid[..., axis] + 1) * size - 1) / 2
 
         if mode == "nearest":
-            axis_coverage = ((position > -0.5) & (position < size - 0.5)).to(dtype=grid.dtype)
+            rounded = torch.round(position)
+            axis_coverage = ((rounded >= 0) & (rounded <= size - 1)).to(dtype=grid.dtype)
+        elif mode == "bicubic":
+            first = torch.floor(position)
+            fraction = position - first
+
+            axis_coverage = torch.zeros_like(position)
+            for offset, weight in enumerate(_cubic_weights(fraction), start=-1):
+                index = first + offset
+                axis_coverage += torch.where((index >= 0) & (index <= size - 1), weight, 0.0)
         else:
             axis_coverage = torch.minimum(1 + position, size - position).clamp_(0, 1)
 
         coverage = axis_coverage if coverage is None else coverage * axis_coverage
 
     return coverage
+
+
+def _cubic_weights(fraction: torch.Tensor, a: float = -0.75) -> tuple[torch.Tensor, ...]:
+    """Returns the weights of the cubic convolution kernel for the four pixels around a sample."""
+
+    def near(x: torch.Tensor) -> torch.Tensor:
+        return ((a + 2) * x - (a + 3)) * x * x + 1
+
+    def far(x: torch.Tensor) -> torch.Tensor:
+        return ((a * x - 5 * a) * x + 8 * a) * x - 4 * a
+
+    return far(fraction + 1), near(fraction), near(1 - fraction), far(2 - fraction)
 
 
 def _reflect(index: torch.Tensor, size: int) -> torch.Tensor:

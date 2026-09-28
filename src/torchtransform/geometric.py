@@ -29,6 +29,30 @@ def axis_index(axis: str, ndim: int) -> int:
     return AXES.index(axis)
 
 
+def on_pixels(matrices: torch.Tensor, shape: tuple[int, ...]) -> torch.Tensor:
+    """Moves signed permutations by half a pixel where needed, so pixels land on pixels.
+
+    Pixel centers lie on whole coordinates along an axis of odd size and halfway between them along
+    an axis of even size, so swapping two axes of different parity would put every pixel between
+    two others. Shifting by half a pixel keeps a quarter turn or a transpose exact.
+
+    Args:
+        matrices: Matrices of shape `(B, n + 1, n + 1)` whose linear parts are signed permutations.
+        shape: Spatial shape of the canvas.
+
+    Returns:
+        The matrices, moved by half a pixel along the axes that need it.
+    """
+
+    ndim = len(shape)
+    offsets = torch.tensor([0.5 if s % 2 == 0 else 0.0 for s in shape[::-1]], dtype=torch.float64)
+
+    linear = matrices[:, :ndim, :ndim]
+    shifts = torch.remainder(offsets - (linear @ offsets[:, None])[..., 0], 1)
+
+    return mat.translation(shifts) @ matrices
+
+
 def rotation_matrices(context: Context, angles: torch.Tensor, axis: AxisParameter) -> torch.Tensor:
     """Returns rotation matrices for angles in degrees of shape `(B,)`, around an axis in 3D."""
 
@@ -345,7 +369,7 @@ class QuarterTurn(MatrixTransform):
         matrices[:, second, first] = sin
         matrices[:, second, second] = cos
 
-        return matrices
+        return on_pixels(matrices, context.shape)
 
 
 class Transpose(MatrixTransform):
@@ -370,7 +394,7 @@ class Transpose(MatrixTransform):
         matrices[:, first, second] = 1
         matrices[:, second, first] = 1
 
-        return matrices
+        return on_pixels(matrices, context.shape)
 
 
 class Symmetry(MatrixTransform):
@@ -413,7 +437,7 @@ class Symmetry(MatrixTransform):
         matrices = mat.identity(batch_size, ndim)
         matrices[:, indices[:, None], indices[None, :]] = linear
 
-        return matrices
+        return on_pixels(matrices, context.shape)
 
 
 class Perspective(MatrixTransform):

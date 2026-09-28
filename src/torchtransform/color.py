@@ -443,7 +443,7 @@ class Normalize(ColorTransform):
     def __init__(self, mean: float | tuple[float, ...], std: float | tuple[float, ...]) -> None:
         """Normalizes every channel, `x` becoming `(x - mean) / std`. Not clamped.
 
-        Put it last. Its inverse, with `Inverse` or on a `Replay`, undoes it.
+        Put it last. `Inverse` undoes it. A `Replay` only replays geometry, so it does not.
 
         Args:
             mean: Mean, one for all channels or one per channel.

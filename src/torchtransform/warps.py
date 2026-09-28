@@ -70,12 +70,13 @@ def evaluate_bspline(control: torch.Tensor, positions: torch.Tensor) -> torch.Te
     weights = []
     for axis in range(ndim):
         size = grid_shape[axis]
-        position = flat_positions[..., ndim - 1 - axis].clamp(1, size - 2 - 1e-6)
+        position = flat_positions[..., ndim - 1 - axis].clamp(1, size - 2)
 
-        # The interval from control point `j` to `j + 1` uses the points `j - 1` to `j + 2`.
-        interval = torch.floor(position)
+        # The interval from control point `j` to `j + 1` uses the points `j - 1` to `j + 2`. It is
+        # clamped as an integer, since in low precision `size - 2` minus a little rounds up.
+        interval = torch.floor(position).clamp(1, size - 3)
         starts.append(interval.to(dtype=torch.int64) - 1)
-        weights.append(cubic_bspline_weights(position - interval))
+        weights.append(cubic_bspline_weights((position - interval).clamp(0, 1)))
 
     strides = torch.tensor(
         [math.prod(grid_shape[axis + 1 :]) for axis in range(ndim)], device=control.device
@@ -205,12 +206,19 @@ class LensDistortion(WarpTransform):
         k = expand(parameters["k"], coordinates)[..., None]
         target = torch.linalg.norm(coordinates, dim=-1, keepdim=True)
 
+        # With negative `k` the backward map reaches out to at most `r * (1 + k * r ** 2)` at
+        # `r = 1 / sqrt(-3 * k)`, so points beyond have no preimage and go to where it peaks.
+        peak = torch.where(
+            k < 0, 1 / torch.sqrt((-3 * k).clamp(min=1e-30)), torch.full_like(k, float("inf"))
+        )
+        target = torch.minimum(target, torch.where(k < 0, peak * 2 / 3, target))
+
         # Newton's method for the radius `r` with `r * (1 + k * r ** 2) = target`.
         radius = target.clone()
         for _ in range(20):
             value = radius * (1 + k * radius * radius) - target
             slope = (1 + 3 * k * radius * radius).clamp(min=1e-3)
-            radius = (radius - value / slope).clamp(min=0)
+            radius = torch.minimum((radius - value / slope).clamp(min=0), peak)
 
         return coordinates * torch.where(
             target > 0, radius / target.clamp(min=1e-12), torch.ones_like(target)
@@ -407,9 +415,9 @@ class GridDistortion(WarpTransform):
         )
         regular = regular.view(1, 1, -1) * size[..., None]
 
-        # The backward map takes the regular boundaries to the distorted ones, since a pixel at a
-        # regular boundary shows what lies at the distorted one; the forward map the other way.
-        sources, targets = (distorted, regular) if forward else (regular, distorted)
+        # The cells of the input are regular, and those of the output distorted: the backward map
+        # takes the distorted boundaries to the regular ones, and the forward map the other way.
+        sources, targets = (regular, distorted) if forward else (distorted, regular)
 
         mapped = []
         for axis in range(ndim):

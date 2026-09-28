@@ -272,3 +272,55 @@ class GeometricTest(TestCase):
         # What the turn uncovers is the paper's color, and the ink is still there.
         torch.testing.assert_close(output[0, :, 0, 0], torch.tensor((0.8, 0.9, 0.95)))
         self.assertLess(float(output.min()), 0.1)
+
+    def test_elastic_warp_before_a_zoom_out_stays_in_bounds(self) -> None:
+        # Coordinates beyond the canvas reach the end of the spline, in any precision.
+        for shape, dtype in (((1024, 1024), torch.float32), ((64, 2048), torch.float64)):
+            images = torch.rand(1, 1, *shape, dtype=dtype)
+
+            for transform in (Scale(0.8), Rotate(20)):
+                output = Compose(ElasticWarp(), transform)(images, seed=0)
+                self.assertTrue(bool(torch.isfinite(output).all()))
+
+    def test_turns_are_exact_on_canvases_of_mixed_parity(self) -> None:
+        images = torch.arange(20.0).view(1, 1, 5, 4)
+
+        for transform in (Transpose(p=1.0), QuarterTurn(turns=1), Symmetry()):
+            output = transform(images, seed=0)
+
+            # Every pixel is one of the input pixels, not a blend of two.
+            self.assertTrue(bool(torch.isin(output, images).all()), type(transform).__name__)
+
+    def test_lens_distortion_keeps_geometry_finite(self) -> None:
+        boxes = torch.tensor([[[0.0, 0.0, 64.0, 64.0]]])
+
+        output = LensDistortion((-0.2, -0.2))(boxes=Boxes(boxes), shape=(64, 64))["boxes"]
+        self.assertTrue(bool(torch.isfinite(output).all()))
+
+        output = Compose(LensDistortion((-0.2, -0.1)), AffineWithinBounds())(
+            torch.rand(2, 3, 32, 32)
+        )
+        self.assertTrue(bool(torch.isfinite(output).all()))
+
+    def test_inverse_after_a_change_of_canvas(self) -> None:
+        points = torch.tensor([[[10.0, 10.0]]])
+        move = Translate(x=0.25, relative=True)
+
+        outputs = Compose(move, Crop(32), Inverse(move))(points=Points(points), shape=(64, 64))
+
+        # Moved by a quarter of 64, cropped by 16, and moved back by the same 16.
+        torch.testing.assert_close(outputs["points"], torch.tensor([[[-6.0, -6.0]]]))
+
+    def test_inverse_of_a_canvas_transform_keeps_to_its_elements(self) -> None:
+        points = torch.full((64, 1, 2), 32.0)
+        crop = RandomCrop(32)
+
+        outputs = Compose(crop, Inverse(crop, p=0.5))(points=Points(points), shape=(64, 64), seed=1)
+        cropped = crop(points=Points(points), shape=(64, 64), seed=1)["points"]
+
+        # Inverted elements are back where they were, the others centered on the new canvas.
+        back = (outputs["points"] == points).all(dim=2)[:, 0]
+        centered = (outputs["points"] == cropped + 16).all(dim=2)[:, 0]
+
+        self.assertTrue(bool((back | centered).all()))
+        self.assertTrue(10 < int(back.sum()) < 54)

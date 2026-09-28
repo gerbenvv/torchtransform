@@ -324,9 +324,8 @@ class MatrixTransform(Transform):
         raise NotImplementedError()
 
     def apply(self, state: State, mask: torch.Tensor | None, inverse: bool) -> None:
-        matrices = state.cached(
-            self, ("matrices", state.shape), lambda: self.get_matrices(state.context(self))
-        )
+        # Cached for the whole call, so an inverse after a change of canvas undoes exactly these.
+        matrices = state.cached(self, "matrices", lambda: self.get_matrices(state.context(self)))
 
         if inverse:
             matrices = torch.linalg.inv(matrices)
@@ -382,7 +381,12 @@ class CanvasTransform(Transform):
                     f"{type(self).__name__} made a canvas of {output_shape}, not {state.shape}."
                 )
 
-            state.push(MatrixStep(torch.linalg.inv(matrices), output_shape, input_shape))
+            inverse_matrices = torch.linalg.inv(matrices)
+            if mask is not None:
+                neutral = centered_placement(state.batch_size, output_shape, input_shape)
+                inverse_matrices = torch.where(mask[:, None, None], inverse_matrices, neutral)
+
+            state.push(MatrixStep(inverse_matrices, output_shape, input_shape))
 
             return
 
@@ -486,8 +490,9 @@ class WarpTransform(Transform):
         return moved
 
     def apply(self, state: State, mask: torch.Tensor | None, inverse: bool) -> None:
+        # Cached for the whole call, so an inverse after a change of canvas undoes exactly these.
         parameters = state.cached(
-            self, ("parameters", state.shape), lambda: self.get_parameters(state.context(self))
+            self, "parameters", lambda: self.get_parameters(state.context(self))
         )
 
         step = WarpStep(
@@ -534,12 +539,18 @@ class ColorTransform(Transform):
             if not target.photometric:
                 continue
 
-            matrices = self.get_color_matrices(state.context(self), ColorView(state, name))
+            # Cached, so an inverse later in the call undoes exactly these, even when they depend
+            # on the image, which will have changed by then.
+            matrices = state.cached(
+                self,
+                ("color", name),
+                lambda: self.get_color_matrices(state.context(self), ColorView(state, name)),
+            )
 
             if inverse:
                 matrices = torch.linalg.inv(matrices)
 
-            state.push_color(name, identity_where(mask, matrices), self.clamp)
+            state.push_color(name, identity_where(mask, matrices), self.clamp, mask)
 
 
 class PixelTransform(Transform):

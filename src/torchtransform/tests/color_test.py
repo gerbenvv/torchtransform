@@ -158,3 +158,18 @@ class ColorTest(TestCase):
 
         output = ColorMatrix(swap)(images)
         torch.testing.assert_close(output, images[:, (1, 0, 2)])
+
+    def test_inverse_of_color_jitter_is_exact(self) -> None:
+        images = torch.rand(8, 3, 8, 8) * 0.5 + 0.25
+        jitter = ColorJitter(0.3, 0.3, 0.3, 0.05)
+
+        output = Compose(jitter, Inverse(jitter))(images, seed=1)
+        torch.testing.assert_close(output, images)
+
+    def test_only_elements_it_applies_to_are_clamped(self) -> None:
+        images = torch.full((64, 3, 2, 2), 1.5)
+
+        output = Brightness(0.5, p=0.5)(images, seed=0)
+        values = set(output[:, 0, 0, 0].tolist())
+
+        self.assertEqual(values, {0.75, 1.5})

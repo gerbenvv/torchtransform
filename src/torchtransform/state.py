@@ -464,16 +464,32 @@ class State:
 
         return self._points
 
-    def push_color(self, name: Hashable, matrices: torch.Tensor, clamp: bool) -> None:
-        """Adds color matrices of shape `(B, C + 1, C + 1)` for an image."""
+    def push_color(
+        self, name: Hashable, matrices: torch.Tensor, clamp: bool, mask: torch.Tensor | None = None
+    ) -> None:
+        """Adds color matrices of shape `(B, C + 1, C + 1)` for an image.
+
+        Args:
+            name: Name of the image.
+            matrices: The matrices, identity for the elements they do not apply to.
+            clamp: Whether the result is clamped to `[0, 1]`.
+            mask: Which elements they apply to, of shape `(B,)`, or `None` for all. Only those are
+                clamped.
+        """
 
         last = self._pending[-1] if self._pending else None
         if last is None or last[0] != "color" or last[2] != clamp:
-            last = ["color", {}, clamp]
+            last = ["color", {}, clamp, {}]
             self._pending.append(last)
 
         previous = last[1].get(name)
         last[1][name] = matrices if previous is None else matrices @ previous
+
+        # Which elements are clamped, where `None` is all of them.
+        if name not in last[3]:
+            last[3][name] = mask
+        elif last[3][name] is not None:
+            last[3][name] = None if mask is None else last[3][name] | mask
 
     def pending_color(self, name: Hashable) -> torch.Tensor | None:
         """Returns the color matrices pending for an image after all pending geometry, if any."""
@@ -502,7 +518,7 @@ class State:
             if kind == "geometry":
                 self._resolve_geometry(segment[1])
             else:
-                self._resolve_color(segment[1], segment[2])
+                self._resolve_color(segment[1], segment[2], segment[3])
 
     def _resolve_geometry(self, steps: list[Step]) -> None:
         self.history.append(steps)
@@ -521,7 +537,12 @@ class State:
 
         self._data_shape = output_shape
 
-    def _resolve_color(self, matrices: dict[Hashable, torch.Tensor], clamp: bool) -> None:
+    def _resolve_color(
+        self,
+        matrices: dict[Hashable, torch.Tensor],
+        clamp: bool,
+        clamped: dict[Hashable, torch.Tensor | None],
+    ) -> None:
         for name, matrix in matrices.items():
             data = self.data[name]
             channels = data.shape[1]
@@ -533,7 +554,12 @@ class State:
             output = torch.baddbmm(offset[..., None], linear, flat).view(data.shape)
 
             if clamp:
-                output = output.clamp_(0, 1)
+                mask = clamped[name]
+                if mask is None:
+                    output = output.clamp_(0, 1)
+                else:
+                    mask = mask.to(device=data.device).view(-1, *(1,) * (data.ndim - 1))
+                    output = torch.where(mask, output.clamp(0, 1), output)
 
             self.set(name, output)
 
